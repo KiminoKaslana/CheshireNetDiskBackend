@@ -50,11 +50,18 @@ public class AuthController : ControllerBase
                 });
             }
 
+            Response.Cookies.Append("access_token", result.Token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = result.ExpiresAt
+            });
+
             return Ok(new ApiResponse<LoginResponse>
             {
                 Success = true,
-                Message = "Login successful",
-                Data = result
+                Message = "Login successful"
             });
         }
         catch (Exception ex)
@@ -80,18 +87,12 @@ public class AuthController : ControllerBase
     {
         try
         {
-            // 从 Authorization header 获取 token
-            var authHeader = Request.Headers["Authorization"].FirstOrDefault();
-            
-            if (string.IsNullOrWhiteSpace(authHeader))
+            var token = Request.Cookies["access_token"];
+
+            if (string.IsNullOrWhiteSpace(token))
             {
                 return Unauthorized();
             }
-
-            // 移除 "Bearer " 前缀
-            var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-                ? authHeader.Substring("Bearer ".Length).Trim()
-                : authHeader;
 
             if (!_authService.ValidateToken(token))
             {
@@ -131,12 +132,24 @@ public class AuthController : ControllerBase
     public IActionResult GetCurrentUser()
     {
         var username = User.Identity?.Name;
-        
+
         return Ok(new ApiResponse<object>
         {
             Success = true,
             Message = "Authenticated",
             Data = new { Username = username }
         });
+    }
+
+    /// <summary>
+    /// 用户登出，清除 Cookie
+    /// </summary>
+    [HttpPost("logout")]
+    [AllowAnonymous]
+    [ProducesResponseType(200)]
+    public IActionResult Logout()
+    {
+        Response.Cookies.Delete("access_token");
+        return Ok(new ApiResponse<object> { Success = true, Message = "Logged out" });
     }
 }
